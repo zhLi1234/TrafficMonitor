@@ -145,6 +145,8 @@ public:
     void SetAlwaysOnTop();          //根据m_always_on_top的值设置窗口置顶
 protected:
     void SetMousePenetrate();       //根据m_mouse_penetrate的值设置是否鼠标穿透
+    bool IsMainWindowOverTaskbar() const;
+    void KeepMainWindowAboveTaskbar();
     POINT CalculateWindowMoveOffset(CRect rect, bool screen_changed);  //计算当窗口处于屏幕区域外时，移动到屏幕区域需要移动的位置
     void CheckWindowPos(bool screen_changed = false);          //测试窗口的位置，如窗口的位置在屏幕外，则移动窗口使其全部都在屏幕内，并返回新位置
     void GetScreenSize();           //获取屏幕的大小

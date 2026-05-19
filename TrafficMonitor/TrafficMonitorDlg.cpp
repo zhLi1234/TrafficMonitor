@@ -276,6 +276,36 @@ void CTrafficMonitorDlg::SetMousePenetrate()
     }
 }
 
+bool CTrafficMonitorDlg::IsMainWindowOverTaskbar() const
+{
+    HWND hTaskbar = ::FindWindow(_T("Shell_TrayWnd"), nullptr);
+    if (hTaskbar == nullptr || !::IsWindow(hTaskbar))
+        return false;
+
+    CRect taskbar_rect;
+    ::GetWindowRect(hTaskbar, taskbar_rect);
+    if (taskbar_rect.IsRectEmpty())
+        return false;
+
+    CRect window_rect;
+    GetWindowRect(window_rect);
+
+    CRect intersect_rect;
+    return intersect_rect.IntersectRect(window_rect, taskbar_rect) != FALSE && !intersect_rect.IsRectEmpty();
+}
+
+void CTrafficMonitorDlg::KeepMainWindowAboveTaskbar()
+{
+    if (!theApp.m_main_wnd_data.m_alow_out_of_border || theApp.m_cfg_data.m_hide_main_window)
+        return;
+    if (theApp.m_main_wnd_data.hide_main_wnd_when_fullscreen && m_is_foreground_fullscreen)
+        return;
+    if (!IsWindowVisible() || !IsMainWindowOverTaskbar())
+        return;
+
+    SetWindowPos(&wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
+
 POINT CTrafficMonitorDlg::CalculateWindowMoveOffset(CRect rect, bool screen_changed)
 {
     POINT mov{};    // 所需偏移量
@@ -1639,6 +1669,7 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
                 last_foreground_fullscreen = m_is_foreground_fullscreen;
             }
         }
+        KeepMainWindowAboveTaskbar();
 
         if (!m_menu_popuped)
         {
@@ -2859,6 +2890,7 @@ void CTrafficMonitorDlg::OnExitSizeMove()
 {
     // TODO: 在此添加消息处理程序代码和/或调用默认值
     CheckWindowPos();
+    KeepMainWindowAboveTaskbar();
 
     CDialog::OnExitSizeMove();
 }
