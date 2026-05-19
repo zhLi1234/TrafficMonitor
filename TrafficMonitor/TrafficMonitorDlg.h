@@ -124,6 +124,8 @@ protected:
     bool m_connection_change_flag{ false };     //如果执行过IniConnection()函数，该flag会置为true
     bool m_is_foreground_fullscreen{ false };   //指示前台窗口是否正在全局显示
     bool m_menu_popuped{ false };               //指示当前是否有菜单处于弹出状态
+    bool m_main_wnd_in_taskbar{ false };        //指示主窗口是否已嵌入任务栏
+    HWND m_main_wnd_taskbar_parent{};           //主窗口嵌入任务栏时的父窗口句柄
 
     HDC m_desktop_dc;
 
@@ -148,6 +150,11 @@ protected:
     POINT CalculateWindowMoveOffset(CRect rect, bool screen_changed);  //计算当窗口处于屏幕区域外时，移动到屏幕区域需要移动的位置
     void CheckWindowPos(bool screen_changed = false);          //测试窗口的位置，如窗口的位置在屏幕外，则移动窗口使其全部都在屏幕内，并返回新位置
     void GetScreenSize();           //获取屏幕的大小
+    HWND FindMainWindowTaskbarParent(CRect& taskbar_rect) const;
+    bool IsMainWindowIntersectingTaskbar(CRect window_rect, CRect& taskbar_rect, HWND& taskbar_parent) const;
+    void EnterMainWindowTaskbarHost(HWND taskbar_parent, const CRect& taskbar_rect);
+    void LeaveMainWindowTaskbarHost();
+    void UpdateMainWindowHostAfterDrag();
 
     void AutoSelect();
     //void UpdateConnections();

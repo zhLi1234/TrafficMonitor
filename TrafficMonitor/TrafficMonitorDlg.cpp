@@ -276,6 +276,101 @@ void CTrafficMonitorDlg::SetMousePenetrate()
     }
 }
 
+HWND CTrafficMonitorDlg::FindMainWindowTaskbarParent(CRect& taskbar_rect) const
+{
+    HWND hTaskbar = ::FindWindow(_T("Shell_TrayWnd"), nullptr);
+    if (hTaskbar == nullptr || !::IsWindow(hTaskbar))
+        return nullptr;
+
+    ::GetWindowRect(hTaskbar, taskbar_rect);
+    if (taskbar_rect.IsRectEmpty())
+        return nullptr;
+
+    return hTaskbar;
+}
+
+bool CTrafficMonitorDlg::IsMainWindowIntersectingTaskbar(CRect window_rect, CRect& taskbar_rect, HWND& taskbar_parent) const
+{
+    taskbar_parent = FindMainWindowTaskbarParent(taskbar_rect);
+    if (taskbar_parent == nullptr)
+        return false;
+
+    CRect intersect_rect;
+    return intersect_rect.IntersectRect(window_rect, taskbar_rect) != FALSE && !intersect_rect.IsRectEmpty();
+}
+
+void CTrafficMonitorDlg::EnterMainWindowTaskbarHost(HWND taskbar_parent, const CRect& taskbar_rect)
+{
+    if (taskbar_parent == nullptr || !::IsWindow(taskbar_parent) || m_main_wnd_in_taskbar)
+        return;
+
+    CRect window_rect;
+    GetWindowRect(window_rect);
+
+    CRect taskbar_local_rect{ window_rect };
+    taskbar_local_rect.OffsetRect(-taskbar_rect.left, -taskbar_rect.top);
+
+    ::SetParent(m_hWnd, taskbar_parent);
+    ModifyStyle(WS_POPUP, WS_CHILD);
+    ModifyStyleEx(WS_EX_APPWINDOW, WS_EX_TOOLWINDOW);
+
+    m_main_wnd_in_taskbar = true;
+    m_main_wnd_taskbar_parent = taskbar_parent;
+
+    SetWindowPos(
+        nullptr,
+        taskbar_local_rect.left,
+        taskbar_local_rect.top,
+        taskbar_local_rect.Width(),
+        taskbar_local_rect.Height(),
+        SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+}
+
+void CTrafficMonitorDlg::LeaveMainWindowTaskbarHost()
+{
+    if (!m_main_wnd_in_taskbar)
+        return;
+
+    CRect window_rect;
+    GetWindowRect(window_rect);
+
+    ::SetParent(m_hWnd, nullptr);
+    ModifyStyle(WS_CHILD, WS_POPUP);
+    ModifyStyleEx(0, WS_EX_TOOLWINDOW);
+
+    m_main_wnd_in_taskbar = false;
+    m_main_wnd_taskbar_parent = nullptr;
+
+    SetWindowPos(
+        nullptr,
+        window_rect.left,
+        window_rect.top,
+        window_rect.Width(),
+        window_rect.Height(),
+        SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+
+    SetAlwaysOnTop();
+}
+
+void CTrafficMonitorDlg::UpdateMainWindowHostAfterDrag()
+{
+    CRect window_rect;
+    GetWindowRect(window_rect);
+
+    CRect taskbar_rect;
+    HWND taskbar_parent{};
+    const bool intersects_taskbar = IsMainWindowIntersectingTaskbar(window_rect, taskbar_rect, taskbar_parent);
+
+    if (!m_main_wnd_in_taskbar && intersects_taskbar)
+    {
+        EnterMainWindowTaskbarHost(taskbar_parent, taskbar_rect);
+    }
+    else if (m_main_wnd_in_taskbar && !intersects_taskbar)
+    {
+        LeaveMainWindowTaskbarHost();
+    }
+}
+
 POINT CTrafficMonitorDlg::CalculateWindowMoveOffset(CRect rect, bool screen_changed)
 {
     POINT mov{};    // 所需偏移量
@@ -332,6 +427,9 @@ POINT CTrafficMonitorDlg::CalculateWindowMoveOffset(CRect rect, bool screen_chan
 
 void CTrafficMonitorDlg::CheckWindowPos(bool screen_changed)
 {
+    if (m_main_wnd_in_taskbar)
+        return;
+
     if (!theApp.m_main_wnd_data.m_alow_out_of_border)
     {
         CRect rect;
@@ -2304,8 +2402,10 @@ void CTrafficMonitorDlg::OnMove(int x, int y)
 
     if (!m_first_start)
     {
-        theApp.m_cfg_data.m_position_x = x;
-        theApp.m_cfg_data.m_position_y = y;
+        CRect rect;
+        GetWindowRect(rect);
+        theApp.m_cfg_data.m_position_x = rect.left;
+        theApp.m_cfg_data.m_position_y = rect.top;
     }
 
     ////确保窗口不会超出屏幕范围
@@ -2410,6 +2510,8 @@ void CTrafficMonitorDlg::OnShowNotifyIcon()
 
 void CTrafficMonitorDlg::OnDestroy()
 {
+    LeaveMainWindowTaskbarHost();
+
     CDialog::OnDestroy();
 
     //程序退出时删除通知栏图标
@@ -2536,6 +2638,8 @@ void CTrafficMonitorDlg::OnAppAbout()
 //当资源管理器重启时会触发此消息
 LRESULT CTrafficMonitorDlg::OnTaskBarCreated(WPARAM wParam, LPARAM lParam)
 {
+    LeaveMainWindowTaskbarHost();
+
     if (m_tBarDlg != nullptr)
     {
         CloseTaskBarWnd();
@@ -2858,6 +2962,9 @@ LRESULT CTrafficMonitorDlg::OnDisplaychange(WPARAM wParam, LPARAM lParam)
 void CTrafficMonitorDlg::OnExitSizeMove()
 {
     // TODO: 在此添加消息处理程序代码和/或调用默认值
+    if (theApp.m_main_wnd_data.m_alow_out_of_border)
+        UpdateMainWindowHostAfterDrag();
+
     CheckWindowPos();
 
     CDialog::OnExitSizeMove();
